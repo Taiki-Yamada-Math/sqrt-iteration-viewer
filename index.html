@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="自然数にルートを繰り返し取ったときの値をグラフ化し、複数の n での変化をアニメーションと GIF で書き出すツール">
+<title>反復平方根ビューア</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@600;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column of two worksheets (single n, then a range of n), each = controls row → chart on graph paper → data */
+:root {
+  --bg: #eaeff2;
+  --panel: #fbfcfd;
+  --ink: #14202b;
+  --muted: #5a6977;
+  --line: #c9d3db;
+  --grid: #e2e8ed;
+  --accent: #1d4ed8;
+  --accent-soft: #dce5fb;
+  --seq-a: #b9c7ec;
+  --seq-b: #1e3a8a;
+  --limit: #c2410c;
+  --font-display: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --panel: #141c24; --ink: #e2e9ef; --muted: #8e9caa; --line: #2c3946; --grid: #1f2a35;
+    --accent: #7ea4ff; --accent-soft: #1c2a4a; --seq-a: #2a3b63; --seq-b: #a8bfff; --limit: #f39a5a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --panel: #141c24; --ink: #e2e9ef; --muted: #8e9caa; --line: #2c3946; --grid: #1f2a35;
+  --accent: #7ea4ff; --accent-soft: #1c2a4a; --seq-a: #2a3b63; --seq-b: #a8bfff; --limit: #f39a5a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+  margin: 0;
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+.masthead { display: grid; grid-template-columns: auto 1fr; gap: 8px 28px; align-items: end; }
+.radical {
+  font-family: var(--font-display); font-weight: 900; font-size: clamp(44px, 9vw, 84px); line-height: 1;
+  color: var(--accent); letter-spacing: -0.04em; white-space: nowrap;
+}
+.radical i { font-style: italic; color: var(--ink); padding-left: 0.06em; }
+.masthead h1 { font-family: var(--font-display); font-weight: 900; font-size: clamp(26px, 4vw, 36px); line-height: 1.2; margin: 0; text-wrap: balance; }
+.masthead p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.formula { font-family: var(--font-num); color: var(--ink); white-space: nowrap; }
+@media (max-width: 560px) { .masthead { grid-template-columns: 1fr; } }
+
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px clamp(14px, 3vw, 26px) 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sheet-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.sheet-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 0; }
+.sheet-head .tag { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.sheet-head p { margin: 0; color: var(--muted); flex: 0 0 100%; max-width: 70ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label, .field .lbl { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: 0.02em; }
+input[type="number"] {
+  font-family: var(--font-num); font-size: 15px; width: 110px; padding: 7px 10px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+input[type="number"].short { width: 84px; }
+input:focus-visible, button:focus-visible, .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 7px 12px; font-size: 13px; color: var(--muted); background: var(--bg); }
+.seg label + label span { border-left: 1px solid var(--line); }
+.seg input:checked + span { background: var(--accent); color: var(--panel); font-weight: 700; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); padding-bottom: 7px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+button {
+  font-family: var(--font-body); font-size: 14px; font-weight: 700; cursor: pointer;
+  padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent);
+  background: var(--accent); color: var(--panel);
+}
+button.ghost { background: transparent; color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: progress; }
+
+.chart { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; border: 1px solid var(--grid); border-radius: 6px; overflow: hidden; }
+.chart canvas { display: block; width: 100%; height: 100%; }
+@media (max-width: 520px) { .chart { aspect-ratio: 4 / 3.4; } }
+
+.note { margin: 0; font-size: 13px; color: var(--muted); max-width: 72ch; }
+.note b { color: var(--ink); font-weight: 700; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--grid); border-radius: 6px; max-height: 360px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 13px; }
+th, td { padding: 6px 14px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; font-size: 12px; text-align: right; }
+td { font-family: var(--font-num); }
+td:first-child, th:first-child { text-align: center; }
+tbody tr:hover { background: var(--accent-soft); }
+
+.player { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.player input[type="range"] { flex: 1 1 200px; min-width: 0; accent-color: var(--accent); }
+.player .pos { font-family: var(--font-num); font-size: 13px; color: var(--muted); min-width: 9ch; text-align: right; font-variant-numeric: tabular-nums; }
+
+.gif-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 4px; border-top: 1px solid var(--grid); padding-block: 14px 0; }
+.status { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gif-out { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.gif-out img { width: 100%; max-width: 800px; border: 1px solid var(--line); border-radius: 6px; display: block; }
+.gif-out figcaption { font-size: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <div class="radical" aria-hidden="true">√√√<i>n</i></div>
+    <div>
+      <h1>反復平方根ビューア</h1>
+      <p>自然数 <i>n</i> にルートを <i>k</i> 回かけると <span class="formula">a<sub>k</sub> = n<sup>1/2<sup>k</sup></sup></span>。どんな <i>n</i> でも値は 1 に近づき、1 との差は毎回ほぼ半分になります。</p>
+    </div>
+  </header>
+
+  <section class="sheet" aria-labelledby="h-single">
+    <div class="sheet-head">
+      <span class="tag">Sheet 1</span>
+      <h2 id="h-single">1つの自然数で調べる</h2>
+      <p>横軸がルートを取った回数 k、縦軸がそのときの値です。グラフにカーソルを重ねると値が出ます。</p>
+    </div>
+    <div class="controls">
+      <div class="field"><label for="n1">自然数 n</label><input id="n1" type="number" min="1" max="1000000000000" step="1" value="256"></div>
+      <div class="field"><label for="k1">ルートの回数 k</label><input id="k1" class="short" type="number" min="1" max="40" step="1" value="10"></div>
+      <div class="field"><span class="lbl">縦軸</span>
+        <div class="seg" role="radiogroup" aria-label="縦軸">
+          <label><input type="radio" name="mode1" id="mode1-lin" value="lin" checked><span>値 a<sub>k</sub></span></label>
+          <label><input type="radio" name="mode1" id="mode1-log" value="log"><span>a<sub>k</sub> − 1（対数軸）</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="chart"><canvas id="c1" aria-label="ルートの回数と値のグラフ" role="img"></canvas></div>
+    <p class="note" id="note1"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>k</th><th>指数 1/2<sup>k</sup></th><th>値 a<sub>k</sub></th><th>a<sub>k</sub> − 1</th><th>前回比 (a<sub>k</sub>−1)/(a<sub>k−1</sub>−1)</th></tr></thead>
+        <tbody id="tb1"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sheet" aria-labelledby="h-multi">
+    <div class="sheet-head">
+      <span class="tag">Sheet 2</span>
+      <h2 id="h-multi">n を変えるとグラフはどう動くか</h2>
+      <p>範囲内の自然数を順番に描き、あいだは n を連続的に動かしてつなぎます。描き終えた曲線は薄く残ります。できたアニメーションは GIF に書き出せます。</p>
+    </div>
+    <div class="controls">
+      <div class="field"><label for="from">n の開始</label><input id="from" class="short" type="number" min="1" step="1" value="1"></div>
+      <div class="field"><label for="to">n の終了</label><input id="to" class="short" type="number" min="1" step="1" value="10"></div>
+      <div class="field"><label for="step">刻み</label><input id="step" class="short" type="number" min="1" step="1" value="1"></div>
+      <div class="field"><label for="k2">ルートの回数 k</label><input id="k2" class="short" type="number" min="1" max="40" step="1" value="8"></div>
+      <div class="field"><label for="tween">補間フレーム数</label><input id="tween" class="short" type="number" min="0" max="40" step="1" value="14"></div>
+      <div class="field"><label for="frameMs">1コマ (ms)</label><input id="frameMs" class="short" type="number" min="20" max="500" step="10" value="40"></div>
+      <div class="field"><label for="holdMs">各 n で停止 (ms)</label><input id="holdMs" class="short" type="number" min="0" max="5000" step="100" value="700"></div>
+      <div class="field"><span class="lbl">縦軸</span>
+        <div class="seg" role="radiogroup" aria-label="縦軸">
+          <label><input type="radio" name="mode2" id="mode2-lin" value="lin" checked><span>値 a<sub>k</sub></span></label>
+          <label><input type="radio" name="mode2" id="mode2-log" value="log"><span>a<sub>k</sub> − 1（対数軸）</span></label>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="trail" checked>描いた曲線を残す</label>
+    </div>
+    <div class="chart"><canvas id="c2" aria-label="n を変えたときのグラフのアニメーション" role="img"></canvas></div>
+    <div class="player">
+      <button id="play" type="button" class="ghost">一時停止</button>
+      <input id="scrub" type="range" min="0" max="0" value="0" aria-label="アニメーションの位置">
+      <span class="pos" id="pos">0 / 0</span>
+    </div>
+    <div class="gif-row">
+      <button id="makeGif" type="button">GIF を作成</button>
+      <button id="saveGif" type="button" class="ghost" hidden>GIF を保存</button>
+      <span class="status" id="gifStatus">800×500 px、いまの設定と配色で書き出します。</span>
+    </div>
+    <figure class="gif-out" id="gifOut" hidden>
+      <img id="gifImg" alt="作成した GIF アニメーション">
+      <figcaption id="gifCap"></figcaption>
+    </figure>
+  </section>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const MONO = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+const SANS = '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif';
+const SERIF = '"Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- theme tokens ---------- */
+const C = {};
+function readTokens() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ['bg','panel','ink','muted','line','grid','accent','accent-soft','seq-a','seq-b','limit']) C[k] = s.getPropertyValue('--' + k).trim();
+}
+const hex2rgb = h => { h = h.replace('#',''); if (h.length === 3) h = [...h].map(c => c + c).join(''); return [0,2,4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+const mix = (a, b, t) => { const A = hex2rgb(a), B = hex2rgb(b); return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',') + ')'; };
+
+/* ---------- math ---------- */
+// a_k = n^(1/2^k) = exp(ln n / 2^k);  a_k - 1 = expm1(ln n / 2^k) (accurate near 1)
+function seq(n, K) {
+  const L = Math.log(n), v = [], d = [];
+  for (let k = 0; k <= K; k++) {
+    if (k === 0) { v.push(n); d.push(n - 1); continue; }
+    const e = L / 2 ** k; v.push(Math.exp(e)); d.push(Math.expm1(e));
+  }
+  return { v, d };
+}
+function stepsBelow(n, eps = 0.01) { // smallest k with a_k - 1 < eps
+  if (n <= 1) return 0;
+  return Math.max(0, Math.ceil(Math.log2(Math.log(n) / Math.log1p(eps))));
+}
+
+/* ---------- formatting ---------- */
+const SUP = { '-': '⁻', '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹' };
+const sup = s => String(s).replace(/[-0-9]/g, c => SUP[c]);
+function fmtSci(x, p = 4) {
+  if (x === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(x)));
+  if (e >= -3 && e < 7) return trimNum(x, p + 2);
+  const m = x / 10 ** e;
+  return m.toFixed(p - 1) + '×10' + sup(e);
+}
+function trimNum(x, sig = 10) {
+  let s = Number(x.toPrecision(sig)).toString();
+  if (s.includes('e')) return fmtSci(x, 4);
+  return s;
+}
+function fmtTick(v) {
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e6) return fmtSci(v, 2);
+  return Number(v.toPrecision(6)).toString();
+}
+
+/* ---------- scales ---------- */
+function niceStep(range, count) {
+  const raw = range / count, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p;
+  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+}
+function niceMax(max) { const s = niceStep(max, 5); return Math.ceil(max / s - 1e-9) * s; }
+function linTicks(min, max, count = 5) {
+  const s = niceStep(max - min, count), out = [];
+  for (let v = Math.ceil(min / s) * s; v <= max + s * 1e-9; v += s) out.push({ v: +v.toPrecision(12), label: fmtTick(+v.toPrecision(12)) });
+  return out;
+}
+function logTicks(min, max) {
+  const e0 = Math.round(Math.log10(min)), e1 = Math.round(Math.log10(max));
+  const st = Math.max(1, Math.ceil((e1 - e0) / 6)), out = [];
+  for (let e = e1; e >= e0; e -= st) out.push({ v: 10 ** e, label: (e >= -3 && e <= 4) ? fmtTick(10 ** e) : '10' + sup(e) });
+  return out;
+}
+function logRange(vals) {
+  const pos = vals.filter(x => x > 0 && isFinite(x));
+  if (!pos.length) return null;
+  const lo = Math.min(...pos), hi = Math.max(...pos);
+  let a = Math.floor(Math.log10(lo)), b = Math.ceil(Math.log10(hi));
+  if (a === b) { a -= 1; }
+  return [10 ** a, 10 ** b];
+}
+
+/* ---------- chart renderer (shared by screen + GIF) ---------- */
+function line(ctx, x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+function drawChart(ctx, W, H, o) {
+  const small = W < 480;
+  const top = o.header ? (small ? 58 : 70) : 18, ml = small ? 54 : 70, mr = small ? 14 : 24, mb = 48;
+  const pw = W - ml - mr, ph = H - top - mb;
+  const lg = o.mode === 'log';
+  ctx.fillStyle = C.panel; ctx.fillRect(0, 0, W, H);
+  const X = k => ml + (o.K ? k / o.K : 0) * pw;
+  const lo = lg ? Math.log10(o.yMin) : o.yMin, hi = lg ? Math.log10(o.yMax) : o.yMax;
+  const Y = v => top + (1 - ((lg ? Math.log10(v) : v) - lo) / (hi - lo)) * ph;
+  const tick = small ? 11 : 12;
+
+  // header (lives inside the canvas so it also appears in the GIF)
+  if (o.header) {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = o.header.dim ? C.muted : C.ink;
+    ctx.font = `600 ${small ? 24 : 32}px ${SERIF}`;
+    ctx.fillText(o.header.big, ml, small ? 38 : 46);
+    if (o.header.small) {
+      ctx.font = `${small ? 11 : 13}px ${SANS}`; ctx.fillStyle = C.muted; ctx.textAlign = 'right';
+      ctx.fillText(o.header.small, ml + pw, small ? 36 : 42);
+    }
+    if (o.header.progress) { // row of ticks: one per n, current filled
+      const { i, N, t } = o.header.progress, w = Math.min(pw * 0.45, N * 14), x0 = ml + pw - w;
+      const yb = small ? 46 : 54;
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 2; line(ctx, x0, yb, x0 + w, yb);
+      const px = N > 1 ? x0 + w * ((i + t) / (N - 1)) : x0 + w;
+      ctx.strokeStyle = C.accent; line(ctx, x0, yb, px, yb);
+    }
+  }
+
+  // grid + y labels
+  ctx.lineWidth = 1;
+  ctx.font = `${tick}px ${MONO}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const yt = lg ? logTicks(o.yMin, o.yMax) : linTicks(o.yMin, o.yMax, small ? 4 : 5);
+  for (const t of yt) {
+    const y = Y(t.v); if (y < top - 1 || y > top + ph + 1) continue;
+    ctx.strokeStyle = C.grid; line(ctx, ml, y, ml + pw, y);
+    ctx.fillStyle = C.muted; ctx.fillText(t.label, ml - 8, y);
+  }
+  const xs = o.K <= (small ? 10 : 16) ? 1 : o.K <= 30 ? (small ? 5 : 2) : 5;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let k = 0; k <= o.K; k += xs) {
+    const x = X(k); ctx.strokeStyle = C.grid; line(ctx, x, top, x, top + ph);
+    ctx.fillStyle = C.muted; ctx.fillText(String(k), x, top + ph + 7);
+  }
+  ctx.strokeStyle = C.line; line(ctx, ml, top + ph + 0.5, ml + pw, top + ph + 0.5); line(ctx, ml - 0.5, top, ml - 0.5, top + ph);
+
+  // axis titles
+  ctx.fillStyle = C.muted; ctx.font = `${tick}px ${SANS}`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  ctx.fillText('ルートを取った回数 k', ml + pw, H - 4);
+  ctx.save(); ctx.translate(small ? 11 : 14, top + ph / 2); ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(lg ? 'aₖ − 1（対数軸）' : '値 aₖ', 0, 0); ctx.restore();
+
+  // limit line a = 1
+  if (!lg) {
+    const y = Y(1);
+    if (y >= top && y <= top + ph) {
+      ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = C.limit; ctx.lineWidth = 1.25; line(ctx, ml, y, ml + pw, y); ctx.restore();
+      ctx.fillStyle = C.limit; ctx.font = `${tick}px ${SANS}`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText('極限 1', ml + pw - 4, y - 3);
+    }
+  }
+
+  // series (clipped to plot area)
+  ctx.save(); ctx.beginPath(); ctx.rect(ml - 6, top - 6, pw + 12, ph + 12); ctx.clip();
+  const pts = o.series.map(s => s.vals.map((v, k) => (lg && !(v > 0)) ? null : [X(k), Y(v)]));
+  o.series.forEach((s, si) => {
+    const P = pts[si];
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); let started = false;
+    for (const p of P) { if (!p) { started = false; continue; } if (!started) { ctx.moveTo(p[0], p[1]); started = true; } else ctx.lineTo(p[0], p[1]); }
+    ctx.stroke();
+    if (s.dots) for (const p of P) { if (!p) continue; ctx.beginPath(); ctx.arc(p[0], p[1], s.dots, 0, Math.PI * 2); ctx.fillStyle = C.panel; ctx.fill(); ctx.lineWidth = 2; ctx.stroke(); }
+  });
+  ctx.restore();
+
+  // curve labels at k = 0, strongest first, skipping ones that would collide
+  const placed = [];
+  const order = o.series.map((s, i) => i).filter(i => o.series[i].label != null).sort((a, b) => (o.series[b].strong ? 1 : 0) - (o.series[a].strong ? 1 : 0));
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (const i of order) {
+    const s = o.series[i], p = pts[i][0]; if (!p || p[1] < top - 4 || p[1] > top + ph + 4) continue;
+    const gap = s.strong ? 0 : 14;
+    if (placed.some(y => Math.abs(y - p[1]) < gap || (s.strong ? false : Math.abs(y - p[1]) < 14))) continue;
+    ctx.font = s.strong ? `700 ${tick + 1}px ${MONO}` : `${tick - 1}px ${MONO}`;
+    ctx.fillStyle = s.strong ? C.accent : C.muted;
+    ctx.fillText(s.label, p[0] + (s.dots ? 9 : 6), p[1] - (s.strong ? 0 : 0));
+    placed.push(p[1]);
+  }
+
+  // hover readout
+  if (o.hoverK != null && o.series.length) {
+    const k = o.hoverK, p = pts[0][k];
+    const x = X(k);
+    ctx.save(); ctx.strokeStyle = C.accent; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; line(ctx, x, top, x, top + ph); ctx.restore();
+    if (p) {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, Math.PI * 2); ctx.fillStyle = C.accent; ctx.fill();
+      const txt = `k = ${k}   ${o.hoverText(k)}`;
+      ctx.font = `600 12px ${MONO}`;
+      const tw = ctx.measureText(txt).width + 18, th = 26;
+      let bx = p[0] + 12, by = p[1] - th - 8;
+      if (bx + tw > W - 4) bx = p[0] - tw - 12;
+      if (by < 4) by = p[1] + 12;
+      ctx.fillStyle = C.ink; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, tw, th, 5) : ctx.rect(bx, by, tw, th); ctx.fill();
+      ctx.fillStyle = C.panel; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, bx + 9, by + th / 2 + 1);
+    }
+  }
+
+  if (o.empty) {
+    ctx.fillStyle = C.muted; ctx.font = `14px ${SANS}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(o.empty, ml + pw / 2, top + ph / 2);
+  }
+  return { X, ml, pw };
+}
+
+/* ---------- canvas sizing ---------- */
+function fit(cv) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: r.width, H: r.height };
+}
+const intIn = (id, lo, hi, def) => { let v = Math.round(Number($(id).value)); if (!isFinite(v)) v = def; return Math.min(hi, Math.max(lo, v)); };
+const radio = name => document.querySelector(`input[name="${name}"]:checked`).value;
+
+/* ================= Sheet 1 ================= */
+let S1 = null, hover1 = null, geo1 = null;
+function compute1() {
+  const n = intIn('n1', 1, 1e12, 256), K = intIn('k1', 1, 40, 10), mode = radio('mode1');
+  const s = seq(n, K);
+  S1 = { n, K, mode, s };
+  // table
+  const rows = [];
+  for (let k = 0; k <= K; k++) {
+    const ratio = k > 0 && s.d[k - 1] > 0 ? (s.d[k] / s.d[k - 1]).toFixed(6) : '—';
+    const expo = k === 0 ? '1' : '1/' + (2 ** k).toLocaleString('en-US');
+    rows.push(`<tr><td>${k}</td><td>${expo}</td><td>${trimNum(s.v[k], 12)}</td><td>${fmtSci(s.d[k], 5)}</td><td>${ratio}</td></tr>`);
+  }
+  $('tb1').innerHTML = rows.join('');
+  const kk = stepsBelow(n), k2 = stepsBelow(n, 1e-6);
+  $('note1').innerHTML = n === 1
+    ? '<b>n = 1</b> はルートを取っても 1 のままなので、グラフは水平線になります。'
+    : `n = ${n.toLocaleString('en-US')} は <b>${kk} 回</b>で 1.01 未満、<b>${k2} 回</b>で 1.000001 未満になります。表の右端の前回比が 0.5 に近づくのは、a<sub>k−1</sub> − 1 = (a<sub>k</sub> − 1)(a<sub>k</sub> + 1) で a<sub>k</sub> → 1 となるためです。`;
+  draw1();
+}
+function draw1() {
+  if (!S1) return;
+  const { ctx, W, H } = fit($('c1'));
+  const { K, mode, s, n } = S1;
+  const vals = mode === 'log' ? s.d : s.v;
+  let yMin = 0, yMax = niceMax(Math.max(...s.v) * 1.02), empty = null;
+  if (mode === 'log') { const r = logRange(s.d); if (r) [yMin, yMax] = r; else { yMin = 0.1; yMax = 1; empty = 'n = 1 では aₖ − 1 = 0 のため対数軸に描けません'; } }
+  geo1 = drawChart(ctx, W, H, {
+    K, mode, yMin, yMax, empty,
+    series: [{ vals, color: C.accent, lw: 2.5, dots: K <= 24 ? 4 : 0, label: null }],
+    hoverK: hover1,
+    hoverText: k => mode === 'log' ? 'aₖ−1 = ' + fmtSci(s.d[k], 4) : 'aₖ = ' + trimNum(s.v[k], 8),
+  });
+}
+['n1','k1'].forEach(id => $(id).addEventListener('input', compute1));
+document.querySelectorAll('input[name="mode1"]').forEach(r => r.addEventListener('change', compute1));
+$('c1').addEventListener('pointermove', e => {
+  if (!S1 || !geo1) return;
+  const r = e.currentTarget.getBoundingClientRect(), x = e.clientX - r.left;
+  const k = Math.round((x - geo1.ml) / geo1.pw * S1.K);
+  const nk = (k < 0 || k > S1.K) ? null : k;
+  if (nk !== hover1) { hover1 = nk; draw1(); }
+});
+$('c1').addEventListener('pointerleave', () => { hover1 = null; draw1(); });
+
+/* ================= Sheet 2 ================= */
+let A = null, fi = 0, playing = !reduceMotion, acc = 0, last = 0, raf = 0;
+const ease = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+function compute2() {
+  let a = intIn('from', 1, 1e9, 1), b = intIn('to', 1, 1e9, 10);
+  if (b < a) [a, b] = [b, a];
+  let st = intIn('step', 1, 1e9, 1);
+  const nums = []; for (let n = a; n <= b && nums.length < 60; n += st) nums.push(n);
+  const K = intIn('k2', 1, 40, 8), T = intIn('tween', 0, 40, 14), fms = intIn('frameMs', 20, 500, 40), hold = intIn('holdMs', 0, 5000, 700);
+  const mode = radio('mode2'), trail = $('trail').checked;
+  const curves = nums.map(n => seq(n, K));
+  const N = nums.length, frames = [];
+  for (let i = 0; i < N; i++) {
+    frames.push({ n: nums[i], int: true, trail: i, i, t: 0, dur: i === N - 1 ? Math.max(hold, 1500) : Math.max(hold, fms) });
+    if (i < N - 1) for (let j = 1; j <= T; j++) {
+      const t = j / (T + 1), e = ease(t);
+      frames.push({ n: nums[i] + (nums[i + 1] - nums[i]) * e, int: false, trail: i + 1, i, t: e, dur: fms });
+    }
+  }
+  let yMin = 0, yMax = niceMax(nums[N - 1] * 1.02);
+  if (mode === 'log') {
+    const all = []; curves.forEach(c => all.push(...c.d));
+    const r = logRange(all); if (r) [yMin, yMax] = r; else { yMin = 0.1; yMax = 1; }
+  }
+  A = { nums, K, mode, trail, curves, frames, yMin, yMax, N, truncated: nums.length === 60 && nums[59] + st <= b };
+  if (fi >= frames.length) fi = 0;
+  $('scrub').max = frames.length - 1;
+  if (!playing) fi = Math.min(fi, frames.length - 1);
+  draw2();
+}
+function frameOpts(f) {
+  const s = [];
+  const key = A.mode === 'log' ? 'd' : 'v';
+  if (A.trail) for (let i = 0; i < f.trail; i++) {
+    s.push({ vals: A.curves[i][key], color: mix(C['seq-a'], C['seq-b'], A.N > 1 ? i / (A.N - 1) : 1), lw: 1.6, label: String(A.nums[i]) });
+  }
+  const cur = f.int ? A.curves[f.i] : seq(f.n, A.K);
+  s.push({ vals: cur[key], color: C.accent, lw: 3, dots: A.K <= 20 ? 3.5 : 0, label: f.int ? String(f.n) : f.n.toFixed(2), strong: true });
+  const reach = f.n <= 1 ? '何回ルートを取っても 1' : `1.01 未満まで ${stepsBelow(f.n)} 回`;
+  return {
+    K: A.K, mode: A.mode, yMin: A.yMin, yMax: A.yMax, series: s,
+    header: {
+      big: 'n = ' + (f.int ? f.n.toLocaleString('en-US') : f.n.toFixed(2)), dim: !f.int,
+      small: f.int ? reach : '',
+      progress: { i: f.i, N: A.N, t: f.t },
+    },
+  };
+}
+function draw2() {
+  if (!A) return;
+  const { ctx, W, H } = fit($('c2'));
+  drawChart(ctx, W, H, frameOpts(A.frames[fi]));
+  $('scrub').value = fi;
+  const f = A.frames[fi];
+  $('pos').textContent = `${f.i + 1} / ${A.N}`;
+}
+function tick(t) {
+  if (!playing) { raf = 0; return; }
+  const dt = Math.min(1000, t - (last || t)); last = t; acc += dt;
+  let moved = false;
+  while (acc >= A.frames[fi].dur) { acc -= A.frames[fi].dur; fi = (fi + 1) % A.frames.length; moved = true; }
+  if (moved) draw2();
+  raf = requestAnimationFrame(tick);
+}
+function setPlaying(p) {
+  playing = p; $('play').textContent = p ? '一時停止' : '再生';
+  if (p && !raf) { last = 0; acc = 0; raf = requestAnimationFrame(tick); }
+}
+$('play').addEventListener('click', () => setPlaying(!playing));
+$('scrub').addEventListener('input', e => { fi = +e.target.value; acc = 0; setPlaying(false); draw2(); });
+['from','to','step','k2','tween','frameMs','holdMs'].forEach(id => $(id).addEventListener('input', () => { fi = 0; acc = 0; compute2(); }));
+document.querySelectorAll('input[name="mode2"]').forEach(r => r.addEventListener('change', compute2));
+$('trail').addEventListener('change', compute2);
+
+/* ================= GIF encoder (GIF89a + LZW, no library) ================= */
+const LZ_CODE = new Int16Array(1 << 20), LZ_GEN = new Int32Array(1 << 20); let lzGen = 1;
+function lzw(ix) {
+  const CLEAR = 256, EOI = 257; let cs = 9, next = 258; lzGen++;
+  const out = new Uint8Array(Math.ceil(ix.length * 1.6) + 1024); let o = 0, accb = 0, bits = 0;
+  const emit = c => { accb |= c << bits; bits += cs; while (bits >= 8) { out[o++] = accb & 255; accb >>>= 8; bits -= 8; } };
+  emit(CLEAR);
+  let p = ix[0];
+  for (let i = 1; i < ix.length; i++) {
+    const k = ix[i], key = (p << 8) | k;
+    if (LZ_GEN[key] === lzGen) { p = LZ_CODE[key]; continue; }
+    emit(p);
+    if (next === 4096) { emit(CLEAR); cs = 9; next = 258; lzGen++; }
+    else { if (next >= (1 << cs)) cs++; LZ_CODE[key] = next++; LZ_GEN[key] = lzGen; }
+    p = k;
+  }
+  emit(p); emit(EOI);
+  if (bits > 0) out[o++] = accb & 255;
+  return out.subarray(0, o);
+}
+function buildPalette(samples) {
+  const hist = new Uint32Array(32768), sr = new Float64Array(32768), sg = new Float64Array(32768), sb = new Float64Array(32768);
+  for (const d of samples) for (let i = 0; i < d.length; i += 8) {
+    const r = d[i], g = d[i + 1], b = d[i + 2], bin = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    hist[bin]++; sr[bin] += r; sg[bin] += g; sb[bin] += b;
+  }
+  const bins = []; for (let i = 0; i < 32768; i++) if (hist[i]) bins.push(i);
+  bins.sort((a, b) => hist[b] - hist[a]);
+  const top = bins.slice(0, 256), pal = new Uint8Array(768);
+  top.forEach((bin, j) => { pal[j * 3] = Math.round(sr[bin] / hist[bin]); pal[j * 3 + 1] = Math.round(sg[bin] / hist[bin]); pal[j * 3 + 2] = Math.round(sb[bin] / hist[bin]); });
+  return { pal, size: Math.max(1, top.length) };
+}
+function makeIndexer(pal, size) {
+  const lut = new Int16Array(32768).fill(-1);
+  return (d, out) => {
+    for (let i = 0, j = 0; j < out.length; i += 4, j++) {
+      const bin = ((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3);
+      let v = lut[bin];
+      if (v < 0) {
+        const R = d[i], G = d[i + 1], B = d[i + 2]; let best = 0, bd = Infinity;
+        for (let q = 0; q < size; q++) { const dr = pal[q * 3] - R, dg = pal[q * 3 + 1] - G, db = pal[q * 3 + 2] - B, dd = 3 * dr * dr + 4 * dg * dg + 2 * db * db; if (dd < bd) { bd = dd; best = q; } }
+        lut[bin] = v = best;
+      }
+      out[j] = v;
+    }
+  };
+}
+const u16 = v => [v & 255, (v >> 8) & 255];
+function gifHeader(w, h, pal) {
+  const b = [...'GIF89a'].map(c => c.charCodeAt(0));
+  b.push(...u16(w), ...u16(h), 0xF7, 0, 0);
+  const head = new Uint8Array(b.length + 768 + 19);
+  head.set(b); head.set(pal, b.length);
+  head.set([0x21, 0xFF, 0x0B, ...[...'NETSCAPE2.0'].map(c => c.charCodeAt(0)), 3, 1, 0, 0, 0], b.length + 768);
+  return head;
+}
+function gifFrame(w, h, ix, delayCs) {
+  const data = lzw(ix), blocks = Math.ceil(data.length / 255);
+  const out = new Uint8Array(8 + 10 + 1 + data.length + blocks + 1); let o = 0;
+  out.set([0x21, 0xF9, 4, 0x04, ...u16(delayCs), 0, 0], o); o += 8;
+  out.set([0x2C, 0, 0, 0, 0, ...u16(w), ...u16(h), 0], o); o += 10;
+  out[o++] = 8;
+  for (let i = 0; i < data.length; i += 255) { const n = Math.min(255, data.length - i); out[o++] = n; out.set(data.subarray(i, i + n), o); o += n; }
+  out[o++] = 0;
+  return out.subarray(0, o);
+}
+
+let gifBlob = null, gifUrl = null, gifName = '', downloads = null;
+(async () => {
+  try { downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { downloads = null; }
+  if (downloads && gifBlob) $('saveGif').hidden = false;
+})();
+
+$('makeGif').addEventListener('click', async () => {
+  if (!A) return;
+  const btn = $('makeGif'); btn.disabled = true;
+  const W = 800, H = 500;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  const frames = A.frames;
+  const status = $('gifStatus');
+  try {
+    // palette from a spread of sample frames
+    const sampleIdx = new Set([0, frames.length - 1]);
+    for (let q = 1; q < 10; q++) sampleIdx.add(Math.round(q * (frames.length - 1) / 10));
+    const samples = [];
+    for (const i of sampleIdx) { drawChart(ctx, W, H, frameOpts(frames[i])); samples.push(ctx.getImageData(0, 0, W, H).data); }
+    const { pal, size } = buildPalette(samples);
+    const index = makeIndexer(pal, size);
+    const parts = [gifHeader(W, H, pal)], ix = new Uint8Array(W * H);
+    for (let i = 0; i < frames.length; i++) {
+      drawChart(ctx, W, H, frameOpts(frames[i]));
+      index(ctx.getImageData(0, 0, W, H).data, ix);
+      parts.push(gifFrame(W, H, ix, Math.max(2, Math.round(frames[i].dur / 10))));
+      if (i % 4 === 0) { status.textContent = `書き出し中… ${i + 1} / ${frames.length} コマ`; await new Promise(r => setTimeout(r, 0)); }
+    }
+    parts.push(new Uint8Array([0x3B]));
+    gifBlob = new Blob(parts, { type: 'image/gif' });
+    if (gifUrl) URL.revokeObjectURL(gifUrl);
+    gifUrl = URL.createObjectURL(gifBlob);
+    gifName = `sqrt-iteration_n${A.nums[0]}-${A.nums[A.N - 1]}_k${A.K}.gif`;
+    $('gifImg').src = gifUrl;
+    const mb = gifBlob.size / 1048576;
+    $('gifCap').textContent = `${W}×${H} px · ${frames.length} コマ · ${mb >= 1 ? mb.toFixed(2) + ' MB' : Math.round(gifBlob.size / 1024) + ' KB'} · n = ${A.nums[0]}〜${A.nums[A.N - 1]}` ;
+    $('gifOut').hidden = false;
+    $('saveGif').hidden = false;
+    status.textContent = 'GIF ができました。';
+  } catch (err) {
+    status.textContent = 'GIF を作れませんでした。コマ数を減らしてもう一度お試しください。';
+  } finally { btn.disabled = false; }
+});
+$('saveGif').addEventListener('click', async () => {
+  if (!gifBlob) return;
+  if (!downloads) {
+    const a = document.createElement('a'); a.href = gifUrl; a.download = gifName;
+    document.body.appendChild(a); a.click(); a.remove();
+    $('gifStatus').textContent = '保存しました。'; return;
+  }
+  try { await downloads.save({ filename: gifName, data: gifBlob }); $('gifStatus').textContent = '保存しました。'; }
+  catch (e) {
+    const code = e && e.code;
+    $('gifStatus').textContent = code === 'declined' ? '保存をキャンセルしました。'
+      : code === 'rate_limited' ? '保存の確認がすでに開いています。少し待ってからお試しください。'
+      : '保存できませんでした。上の画像を右クリック（長押し）して保存してください。';
+    if (code === 'unavailable' || code === 'not_granted') $('saveGif').hidden = true;
+  }
+});
+
+/* ---------- boot + theme / resize ---------- */
+function redrawAll() { readTokens(); draw1(); draw2(); }
+readTokens(); compute1(); compute2(); setPlaying(playing);
+if (!playing) { fi = A.frames.length - 1; draw2(); }
+new ResizeObserver(() => { draw1(); draw2(); }).observe($('c1'));
+new ResizeObserver(() => draw2()).observe($('c2'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+})();
+</script>
+</body>
+</html>
