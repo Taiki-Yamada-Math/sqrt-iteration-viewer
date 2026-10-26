@@ -334,7 +334,7 @@ function drawChart(ctx, W, H, o) {
   ctx.fillText('ルートを取った回数 k', ml + pw, H - 4);
   ctx.save(); ctx.translate(small ? 11 : 14, top + ph / 2); ctx.rotate(-Math.PI / 2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(lg ? 'aₖ − 1（対数軸）' : '値 aₖ', 0, 0); ctx.restore();
+  ctx.fillText(lg ? '対数軸' : '値 aₖ', 0, 0); ctx.restore();
 
   // limit line a = 1
   if (!lg) {
