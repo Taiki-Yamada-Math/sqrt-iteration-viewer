@@ -9,8 +9,3 @@
 
 外部ライブラリは使っていません（GIF エンコーダーも `index.html` 内に実装）。フォントは Google Fonts から読み込みます。
 
-## GitHub Pages で公開する
-
-1. このフォルダの中身（`index.html`, `README.md`, `sample_n1-10.gif`, `.nojekyll`）をリポジトリのルートに置きます。
-2. リポジトリの **Settings → Pages** を開き、**Source** を「Deploy from a branch」、**Branch** を `main` / `/ (root)` にして保存します。
-3. 1〜2 分後に `https://<ユーザー名>.github.io/<リポジトリ名>/` で公開されます。
