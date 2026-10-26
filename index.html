@@ -129,7 +129,7 @@ tbody tr:hover { background: var(--accent-soft); }
     <div class="radical" aria-hidden="true">√√√<i>n</i></div>
     <div>
       <h1>反復平方根ビューア</h1>
-      <p>自然数 <i>n</i> にルートを <i>k</i> 回かけると <span class="formula">a<sub>k</sub> = n<sup>1/2<sup>k</sup></sup></span>。どんな <i>n</i> でも値は 1 に近づき、1 との差は毎回ほぼ半分になります。</p>
+      <p>自然数 <i>n</i> にルートを <i>k</i> 回かけるとどうなるでしょう。</p>
     </div>
   </header>
 
@@ -145,7 +145,7 @@ tbody tr:hover { background: var(--accent-soft); }
       <div class="field"><span class="lbl">縦軸</span>
         <div class="seg" role="radiogroup" aria-label="縦軸">
           <label><input type="radio" name="mode1" id="mode1-lin" value="lin" checked><span>値 a<sub>k</sub></span></label>
-          <label><input type="radio" name="mode1" id="mode1-log" value="log"><span>a<sub>k</sub> − 1（対数軸）</span></label>
+          // <label><input type="radio" name="mode1" id="mode1-log" value="log"><span>a<sub>k</sub> − 1（対数軸）</span></label>
         </div>
       </div>
     </div>
@@ -426,7 +426,7 @@ function compute1() {
   const kk = stepsBelow(n), k2 = stepsBelow(n, 1e-6);
   $('note1').innerHTML = n === 1
     ? '<b>n = 1</b> はルートを取っても 1 のままなので、グラフは水平線になります。'
-    : `n = ${n.toLocaleString('en-US')} は <b>${kk} 回</b>で 1.01 未満、<b>${k2} 回</b>で 1.000001 未満になります。表の右端の前回比が 0.5 に近づくのは、a<sub>k−1</sub> − 1 = (a<sub>k</sub> − 1)(a<sub>k</sub> + 1) で a<sub>k</sub> → 1 となるためです。`;
+    : `n = ${n.toLocaleString('en-US')} は <b>${kk} 回</b>で 1.01 未満、<b>${k2} 回</b>で 1.000001 未満になります。`;
   draw1();
 }
 function draw1() {
